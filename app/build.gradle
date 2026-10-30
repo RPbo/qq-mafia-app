@@ -1,0 +1,48 @@
+plugins { id 'com.android.application' }
+
+// Firebase подключается, только если рядом лежит google-services.json (в CI он берётся из секрета)
+if (file('google-services.json').exists()) { apply plugin: 'com.google.gms.google-services' }
+
+def vc = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+
+android {
+    namespace 'online.qqhtml.mafia'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'online.qqhtml.mafia'
+        minSdk 26
+        targetSdk 34
+        versionCode vc
+        versionName "1.0.${vc}"
+        buildConfigField 'String', 'SITE_URL', '"https://mafia.qqhtml.online/"'
+        buildConfigField 'String', 'UPDATE_API', '"https://api.github.com/repos/RPbo/qq-mafia-app/releases/latest"'
+    }
+    signingConfigs {
+        release {
+            def ks = System.getenv('KEYSTORE_FILE')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    buildFeatures { buildConfig true }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+    implementation platform('com.google.firebase:firebase-bom:33.1.2')
+    implementation 'com.google.firebase:firebase-messaging'
+}
