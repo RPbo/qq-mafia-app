@@ -49,8 +49,8 @@ public class MainActivity extends Activity {
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-            Insets b = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
-            v.setPadding(b.left, b.top, b.right, b.bottom);
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
             return WindowInsetsCompat.CONSUMED;
         });
         WindowCompat.getInsetsController(getWindow(), root).setAppearanceLightStatusBars(false);
