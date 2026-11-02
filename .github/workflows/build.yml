@@ -51,7 +51,16 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease bundleRelease -PversionCode=${{ github.run_number }} --no-daemon --stacktrace
+        run: |
+          set +e
+          gradle assembleRelease bundleRelease -PversionCode=${{ github.run_number }} --no-daemon --stacktrace > build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            msg=$(grep -E "error:|What went wrong|Execution failed|FAILURE|Could not|not found|Unsupported|incompatible|requires" -A4 build.log | head -60 | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error title=Сборка не прошла::$msg"
+            tail -40 build.log
+          fi
+          exit $code
 
       - name: Подготовить файлы
         run: |
