@@ -10,7 +10,14 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
+import android.graphics.Color;
 import android.view.ViewGroup;
+import android.window.OnBackInvokedDispatcher;
+import android.widget.FrameLayout;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -23,11 +30,10 @@ import com.google.firebase.messaging.FirebaseMessaging;
 
 import org.json.JSONObject;
 
-/** Оболочка над сайтом игры: WebView, push-уведомления и автообновление через GitHub Releases. */
+/** Оболочка над сайтом игры: WebView и push-уведомления. Обновления приходят через Google Play. */
 public class MainActivity extends Activity {
     private WebView web;
     private SharedPreferences sp;
-    private UpdateManager upd;
     private String host;
 
     @Override
@@ -38,8 +44,16 @@ public class MainActivity extends Activity {
         Notif.channels(this);
 
         web = new WebView(this);
-        web.setLayoutParams(new ViewGroup.LayoutParams(-1, -1));
-        setContentView(web);
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
+        root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(root);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets b = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime());
+            v.setPadding(b.left, b.top, b.right, b.bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
+        WindowCompat.getInsetsController(getWindow(), root).setAppearanceLightStatusBars(false);
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -89,10 +103,11 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
         fetchToken();
+        if (Build.VERSION.SDK_INT >= 33) {                  // с targetSdk 36 onBackPressed не вызывается: регистрируем обработчик «Назад»
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
+        }
 
         web.loadUrl(target(getIntent()));
-        upd = new UpdateManager(this);
-        upd.check(false);
     }
 
     private String target(Intent i) {
@@ -135,7 +150,13 @@ public class MainActivity extends Activity {
         public void openUrl(String u) { runOnUiThread(() -> openExternal(Uri.parse(u))); }
 
         @JavascriptInterface
-        public void checkUpdate() { runOnUiThread(() -> upd.check(true)); }
+        public void checkUpdate() { /* обновления через магазин приложений */ }
+
+        @JavascriptInterface
+        public String getSession() { return sp.getString("sess", ""); }          // вход хранится в самом приложении
+
+        @JavascriptInterface
+        public void setSession(String v) { sp.edit().putString("sess", v == null ? "" : v).apply(); }
     }
 
     @Override
@@ -149,7 +170,6 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
-        if (upd != null) upd.resumePending();
     }
 
     @Override
@@ -161,7 +181,9 @@ public class MainActivity extends Activity {
     /** «Назад» не закрывает игру: внутри сайта шагает назад, на первом экране сворачивает приложение. */
     @Override
     @SuppressWarnings("deprecation")
-    public void onBackPressed() {
+    public void onBackPressed() { handleBack(); }
+
+    private void handleBack() {
         if (web.canGoBack()) web.goBack();
         else moveTaskToBack(true);
     }

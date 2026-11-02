@@ -7,15 +7,14 @@ def vc = (project.findProperty('versionCode') ?: '1').toString().toInteger()
 
 android {
     namespace 'online.qqhtml.mafia'
-    compileSdk 34
+    compileSdk 36
     defaultConfig {
         applicationId 'online.qqhtml.mafia'
         minSdk 26
-        targetSdk 34
+        targetSdk 36
         versionCode vc
         versionName "1.0.${vc}"
         buildConfigField 'String', 'SITE_URL', '"https://mafia.qqhtml.online/"'
-        buildConfigField 'String', 'UPDATE_API', '"https://api.github.com/repos/RPbo/qq-mafia-app/releases/latest"'
     }
     signingConfigs {
         release {
@@ -42,7 +41,7 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.core:core:1.15.0'
     implementation platform('com.google.firebase:firebase-bom:33.1.2')
     implementation 'com.google.firebase:firebase-messaging'
 }

@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK and AAB
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
 
       - name: Принять лицензии Android SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
@@ -51,10 +51,12 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease -PversionCode=${{ github.run_number }} --no-daemon --stacktrace
+        run: gradle assembleRelease bundleRelease -PversionCode=${{ github.run_number }} --no-daemon --stacktrace
 
-      - name: Подготовить файл
-        run: cp app/build/outputs/apk/release/app-release.apk qq-mafia.apk
+      - name: Подготовить файлы
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk qq-mafia.apk
+          cp app/build/outputs/bundle/release/app-release.aab qq-mafia.aab
 
       - name: Релиз на GitHub
         uses: softprops/action-gh-release@v2
@@ -62,7 +64,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: QQ Mafia 1.0.${{ github.run_number }}
           body: |
-            Сборка ${{ github.run_number }}. Приложение само предложит обновиться.
-            Скачать вручную: файл qq-mafia.apk ниже.
-          files: qq-mafia.apk
+            Сборка ${{ github.run_number }}.
+            qq-mafia.aab — файл для загрузки в Google Play Console (обновления приходят через магазин).
+            qq-mafia.apk — для ручной установки.
+          files: |
+            qq-mafia.apk
+            qq-mafia.aab
           make_latest: true
