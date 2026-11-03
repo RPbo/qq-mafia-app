@@ -1,0 +1,76 @@
+name: Build iOS (TestFlight)
+
+# Запускается вручную: Actions → Build iOS → Run workflow.
+# Нужны секреты репозитория: APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (содержимое файла AuthKey_XXXX.p8 в base64).
+# Приложение с bundle id online.qqhtml.mafia должно быть создано в App Store Connect.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверка секретов
+        env:
+          T: ${{ secrets.APPLE_TEAM_ID }}
+          K: ${{ secrets.ASC_KEY_ID }}
+          I: ${{ secrets.ASC_ISSUER_ID }}
+          P: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          for v in T K I P; do
+            if [ -z "${!v}" ]; then echo "::error::Не задан один из секретов: APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8"; exit 1; fi
+          done
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo "$P" | base64 -d > "$HOME/.appstoreconnect/private_keys/AuthKey_$K.p8"
+
+      - name: Установить XcodeGen
+        run: brew install xcodegen
+
+      - name: Собрать проект
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Архив
+        working-directory: ios
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild archive -project QQMafia.xcodeproj -scheme QQMafia -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/QQMafia.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="${{ github.run_number }}" MARKETING_VERSION="1.0"
+
+      - name: Экспорт IPA
+        working-directory: ios
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          sed -i '' "s/TEAM_ID_PLACEHOLDER/$APPLE_TEAM_ID/" ExportOptions.plist
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/QQMafia.xcarchive" -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER"
+          ls "$RUNNER_TEMP/export"
+
+      - name: Загрузить в TestFlight
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app --type ios -f "$RUNNER_TEMP"/export/*.ipa --apiKey "$KEY_ID" --apiIssuer "$ISSUER"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QQMafia-ipa
+          path: ${{ runner.temp }}/export/*.ipa
